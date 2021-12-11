@@ -52,7 +52,7 @@ jobs:
       - name: Lint code
         if: ${{ contains(matrix.elixir, '1.12.3') && contains(matrix.otp, '24.1') }}
         run: MIX_ENV=test mix credo --strict
-      - name: Run tests with coverage
-        run: MIX_ENV=test mix coveralls.github
+      # - name: Run tests with coverage
+      #   run: MIX_ENV=test mix coveralls.github
       - name: Static code analysis
         run: mix dialyzer
