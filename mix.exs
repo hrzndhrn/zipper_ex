@@ -11,6 +11,7 @@ defmodule ZipperEx.MixProject do
       elixir: "~> 1.11",
       source_ulr: @source_url,
       name: "ZipperEx",
+      description: description(),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -27,6 +28,10 @@ defmodule ZipperEx.MixProject do
     ]
   end
 
+  defp description do
+    "ZipperEx provides functions to handle an traverse tree data structures."
+  end
+
   defp docs do
     [
       source_ref: "v#{@version}",
@@ -35,7 +40,7 @@ defmodule ZipperEx.MixProject do
     ]
   end
 
-  def preferred_cli_env do
+  defp preferred_cli_env do
     [
       coveralls: :test,
       "coveralls.detail": :test,
