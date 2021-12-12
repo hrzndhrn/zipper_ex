@@ -85,7 +85,7 @@ iex> zipper = Zipper.down(zipper)
 #ZipperEx<2>
 iex> zipper = Zipper.right(zipper)
 #ZipperEx<{3, [4, 5]}>
-iex> Zipper.remove(zipper) |> Zipper.root()
+iex> zipper |> Zipper.remove() |> Zipper.root()
 {1, [2, 6, {7, [0]}]}
 ```
 
