@@ -9,7 +9,7 @@ An Elixir implementation for Zipper based on the paper
 https://www.st.cs.uni-saarland.de/edu/seminare/2005/advanced-fp/docs/huet-zipper.pdf).
 by Gérard Huet.
 
-`ZipperEx` provides functions to handle an traverse tree data structures.
+`ZipperEx` provides functions to handle and traverse tree data structures.
 
 ## Installation
 
