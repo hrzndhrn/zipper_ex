@@ -9,7 +9,7 @@ defmodule ZipperEx.MapTest do
 
       assert ZipperEx.Map.new(tree) == %ZipperEx{
                left: [],
-               location: tree,
+               loc: tree,
                module: ZipperEx.Map,
                path: nil,
                right: []

@@ -7,7 +7,7 @@ defmodule ZipperEx.ListTest do
     test "returns a new zipper for lists" do
       assert ZipperEx.List.new([1, 2]) == %ZipperEx{
                left: [],
-               location: [1, 2],
+               loc: [1, 2],
                module: ZipperEx.List,
                path: nil,
                right: []
