@@ -191,7 +191,10 @@ defmodule ZipperEx do
       defdelegate top(zipper), to: ZipperEx
       defdelegate traverse(zipper, fun), to: ZipperEx
       defdelegate traverse(zipper, acc, fun), to: ZipperEx
+      defdelegate traverse_while(zipper, fun), to: ZipperEx
+      defdelegate traverse_while(zipper, acc, fun), to: ZipperEx
       defdelegate up(zipper), to: ZipperEx
+      defdelegate update(zipper, fun), to: ZipperEx
     end
   end
 
@@ -734,13 +737,15 @@ defmodule ZipperEx do
       #ZipperEx<{1, [{2, [3, 4]}, 5]}>
   """
   @spec top(ZipperEx.t()) :: ZipperEx.t()
-  def top(%ZipperEx{path: nil} = zipper), do: zipper
+  def top(%ZipperEx{path: path} = zipper) when path in [nil, :end], do: zipper
 
   def top(%ZipperEx{} = zipper), do: zipper |> up() |> top()
 
   @doc """
   Traverses the tree for the given `zipper` in depth-first pre-order and invokes
   `fun` for each zipper along the way.
+
+  If the `zipper` is not at the top, just the subtree will be traversed.
 
   ## Examples
 
@@ -752,16 +757,30 @@ defmodule ZipperEx do
       ...>   end)
       ...> end)
       #ZipperEx<{101, [{102, [203, 204]}, 205]}>
+
+      iex> {1, [{2, [3, 4]}, 5]}
+      ...> |> Support.Zipper.new()
+      ...> |> ZipperEx.down()
+      ...> |> ZipperEx.traverse(fn z ->
+      ...>   ZipperEx.update(z, fn
+      ...>     {value, children} -> {value + 100, children}
+      ...>     value -> value + 200
+      ...>   end)
+      ...> end)
+      ...> |> ZipperEx.root()
+      {1, [{102, [203, 204]}, 5]}
   """
   @spec traverse(ZipperEx.t(), (ZipperEx.t() -> ZipperEx.t())) :: ZipperEx.t()
-  def traverse(%ZipperEx{} = zipper, fun) when is_function(fun, 1) do
-    zipper =
-      case end?(zipper) do
-        false -> zipper
-        true -> %ZipperEx{zipper | path: nil}
-      end
+  def traverse(%ZipperEx{path: :end} = zipper, fun) when is_function(fun, 1) do
+    do_traverse(%ZipperEx{zipper | path: nil}, fun)
+  end
 
+  def traverse(%ZipperEx{path: nil} = zipper, fun) when is_function(fun, 1) do
     do_traverse(zipper, fun)
+  end
+
+  def traverse(%ZipperEx{} = zipper, fun) when is_function(fun, 1) do
+    replace(zipper, zipper |> new() |> do_traverse(fun) |> node())
   end
 
   defp do_traverse(%ZipperEx{path: :end} = zipper, _fun), do: zipper
@@ -775,6 +794,8 @@ defmodule ZipperEx do
   @doc """
   Traverses the tree for the given `zipper` in depth-first pre-order and invokes
   `fun` for each zipper along the way with the accumulator.
+
+  If the `zipper` is not at the top, just the subtree will be traversed.
 
   ## Examples
 
@@ -797,14 +818,18 @@ defmodule ZipperEx do
           (ZipperEx.t(), acc -> {ZipperEx.t(), acc})
         ) :: {ZipperEx.t(), acc}
         when acc: term()
-  def traverse(%ZipperEx{} = zipper, acc, fun) when is_function(fun, 2) do
-    zipper =
-      case end?(zipper) do
-        false -> zipper
-        true -> %ZipperEx{zipper | path: nil}
-      end
+  def traverse(%ZipperEx{path: :end} = zipper, acc, fun) when is_function(fun, 2) do
+    do_traverse(%ZipperEx{zipper | path: nil}, acc, fun)
+  end
 
+  def traverse(%ZipperEx{path: nil} = zipper, acc, fun) when is_function(fun, 2) do
     do_traverse(zipper, acc, fun)
+  end
+
+  def traverse(%ZipperEx{} = zipper, acc, fun) when is_function(fun, 2) do
+    sub = new(zipper)
+    {replacement, acc} = do_traverse(sub, acc, fun)
+    {replace(zipper, node(replacement)), acc}
   end
 
   defp do_traverse(%ZipperEx{path: :end} = zipper, acc, _fun), do: {zipper, acc}
@@ -814,6 +839,150 @@ defmodule ZipperEx do
     next = next(zipper)
 
     do_traverse(next, acc, fun)
+  end
+
+  @doc """
+  Traverses the tree for the given `zipper` in depth-first pre-order until
+  `fun` returns `{:halt, zipper}`. A subtree will be skipped if `fun` returns
+  `{:skip, zipper}`.
+
+  If the `zipper` is not at the top, just the subtree will be traversed.
+
+  ## Examples
+
+      iex> zipper = Support.Zipper.new({1, [{2, [3, 4]}, 5]})
+      iex> ZipperEx.traverse_while(zipper, fn z ->
+      ...>   case ZipperEx.node(z) do
+      ...>     {2, _children} ->
+      ...>       {:halt, z}
+      ...>     _else ->
+      ...>       {:cont, ZipperEx.update(z, fn
+      ...>         {value, children} -> {value + 100, children}
+      ...>         value -> value + 200
+      ...>       end)}
+      ...>   end
+      ...> end)
+      #ZipperEx<{101, [{2, [3, 4]}, 5]}>
+
+      iex> zipper = Support.Zipper.new({1, [{2, [3, 4]}, 5]})
+      iex> ZipperEx.traverse_while(zipper, fn z ->
+      ...>   case ZipperEx.node(z) do
+      ...>     {2, _children} ->
+      ...>       {:skip, z}
+      ...>     _else ->
+      ...>       {:cont, ZipperEx.update(z, fn
+      ...>         {value, children} -> {value + 100, children}
+      ...>         value -> value + 200
+      ...>       end)}
+      ...>   end
+      ...> end)
+      #ZipperEx<{101, [{2, [3, 4]}, 205]}>
+  """
+  @spec traverse_while(
+          ZipperEx.t(),
+          (ZipperEx.t() ->
+             {:cont, ZipperEx.t()}
+             | {:halt, ZipperEx.t()}
+             | {:skip, ZipperEx.t()})
+        ) :: ZipperEx.t()
+  def traverse_while(%ZipperEx{path: :end} = zipper, fun) when is_function(fun, 1) do
+    do_traverse_while(%ZipperEx{zipper | path: nil}, fun)
+  end
+
+  def traverse_while(%ZipperEx{path: nil} = zipper, fun) when is_function(fun, 1) do
+    do_traverse_while(zipper, fun)
+  end
+
+  def traverse_while(%ZipperEx{} = zipper, fun) when is_function(fun, 1) do
+    replace(zipper, zipper |> new() |> do_traverse_while(fun) |> node())
+  end
+
+  defp do_traverse_while(%ZipperEx{path: :end} = zipper, _fun), do: zipper
+
+  defp do_traverse_while(zipper, fun) do
+    case fun.(zipper) do
+      {:cont, cont} -> cont |> next() |> do_traverse_while(fun)
+      {:skip, skip} -> skip |> next(:right) |> do_traverse_while(fun)
+      {:halt, halt} -> halt |> top() |> Map.put(:path, :end)
+    end
+  end
+
+  @doc """
+  Traverses the tree for the given `zipper` in depth-first pre-order until
+  `fun` returns `{:halt, zipper, acc}`. A subtree will be skipped if `fun`
+  returns `{:skip, zipper, acc}`.
+
+  If the `zipper` is not at the top, just the subtree will be traversed.
+
+  ## Examples
+
+      iex> zipper = Support.Zipper.new({1, [{2, [3, 4]}, {5, [6]}, 7]})
+      iex> {zipper, acc} = ZipperEx.traverse_while(zipper, [], fn z, acc ->
+      ...>   case ZipperEx.node(z) do
+      ...>     {5, _children} ->
+      ...>       {:halt, z, acc}
+      ...>     _else ->
+      ...>       updated = ZipperEx.update(z, fn
+      ...>         {value, children} -> {value + 100, children}
+      ...>         value -> value + 200
+      ...>       end)
+      ...>       {:cont, updated, [ZipperEx.node(z) | acc]}
+      ...>   end
+      ...> end)
+      iex> zipper
+      #ZipperEx<{101, [{102, [203, 204]}, {5, [6]}, 7]}>
+      iex> acc
+      [4, 3, {2, [3, 4]}, {1, [{2, [3, 4]}, {5, [6]}, 7]}]
+
+      iex> zipper = Support.Zipper.new({1, [{2, [3, 4]}, {5, [6]}, 7]})
+      iex> {zipper, acc} = ZipperEx.traverse_while(zipper, [], fn z, acc ->
+      ...>   case ZipperEx.node(z) do
+      ...>     {5, _children} ->
+      ...>       {:skip, z, acc}
+      ...>     _else ->
+      ...>       updated = ZipperEx.update(z, fn
+      ...>         {value, children} -> {value + 100, children}
+      ...>         value -> value + 200
+      ...>       end)
+      ...>       {:cont, updated, [ZipperEx.node(z) | acc]}
+      ...>   end
+      ...> end)
+      iex> zipper
+      #ZipperEx<{101, [{102, [203, 204]}, {5, [6]}, 207]}>
+      iex> acc
+      [7, 4, 3, {2, [3, 4]}, {1, [{2, [3, 4]}, {5, [6]}, 7]}]
+  """
+  @spec traverse_while(
+          ZipperEx.t(),
+          acc,
+          (ZipperEx.t(), acc ->
+             {:cont, ZipperEx.t(), acc}
+             | {:halt, ZipperEx.t(), acc}
+             | {:skip, ZipperEx.t(), acc})
+        ) :: {ZipperEx.t(), acc}
+        when acc: term()
+  def traverse_while(%ZipperEx{path: :end} = zipper, acc, fun) when is_function(fun, 2) do
+    do_traverse_while(%ZipperEx{zipper | path: nil}, acc, fun)
+  end
+
+  def traverse_while(%ZipperEx{path: nil} = zipper, acc, fun) when is_function(fun, 2) do
+    do_traverse_while(zipper, acc, fun)
+  end
+
+  def traverse_while(%ZipperEx{} = zipper, acc, fun) when is_function(fun, 2) do
+    sub = new(zipper)
+    {replacement, acc} = do_traverse_while(sub, acc, fun)
+    {replace(zipper, node(replacement)), acc}
+  end
+
+  defp do_traverse_while(%ZipperEx{path: :end} = zipper, acc, _fun), do: {zipper, acc}
+
+  defp do_traverse_while(zipper, acc, fun) do
+    case fun.(zipper, acc) do
+      {:cont, cont, acc} -> cont |> next() |> do_traverse_while(acc, fun)
+      {:skip, skip, acc} -> skip |> next(:right) |> do_traverse_while(acc, fun)
+      {:halt, halt, acc} -> {halt |> top() |> Map.put(:path, :end), acc}
+    end
   end
 
   @doc """
@@ -831,7 +1000,7 @@ defmodule ZipperEx do
       #ZipperEx<#TreeNode<1, [#TreeNode<2, []>, #TreeNode<3, []>]>>
   """
   @spec up(ZipperEx.t()) :: ZipperEx.t() | nil
-  def up(%ZipperEx{path: nil}), do: nil
+  def up(%ZipperEx{path: path}) when path in [nil, :end], do: nil
 
   def up(%ZipperEx{left: left, location: location, path: path, right: right}) do
     children = Enum.reverse(left) ++ [location] ++ right

@@ -232,6 +232,10 @@ defmodule ZipperExTest do
       zipper = Zipper.new(tree)
 
       assert Zipper.up(zipper) == nil
+
+      zipper = %{zipper | path: :end}
+
+      assert Zipper.up(zipper) == nil
     end
   end
 
@@ -248,6 +252,14 @@ defmodule ZipperExTest do
 
       assert Zipper.node(inside) == {21, [31, 32]}
       assert inside |> Zipper.top() |> Zipper.node() == tree
+    end
+
+    test "returns the root of an ended zipper" do
+      tree = {1, [11, {12, [{21, [31, 32]}, 22]}, 13]}
+      zipper = Zipper.new(tree)
+      zipper = %{zipper | path: :end}
+
+      assert Zipper.top(zipper) == zipper
     end
   end
 
@@ -323,6 +335,135 @@ defmodule ZipperExTest do
                path: :end,
                right: []
              }
+    end
+
+    test "runs through the updating odd values" do
+      zipper = Zipper.new({1, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]})
+
+      add = 100
+
+      fun = fn sub ->
+        case Zipper.node(sub) do
+          {value, _children} when rem(value, 2) == 1 ->
+            Zipper.update(sub, fn {value, children} -> {value + add, children} end)
+
+          value when rem(value, 2) == 1 ->
+            Zipper.update(sub, fn value -> value + add end)
+
+          _else ->
+            sub
+        end
+      end
+
+      updated = Zipper.traverse(zipper, fun)
+
+      assert Zipper.node(updated) == {
+               101,
+               [{111, [121, 22]}, {12, [123, 24]}, {113, [125, 26]}]
+             }
+    end
+
+    test "traverses a subtree" do
+      zipper = Zipper.new({1, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]})
+
+      add = 100
+
+      fun = fn sub ->
+        Zipper.update(sub, fn
+          {value, children} -> {value + add, children}
+          value -> value + add
+        end)
+      end
+
+      updated = zipper |> Zipper.down() |> Zipper.traverse(fun)
+
+      assert Zipper.root(updated) == {
+               1,
+               [{111, [121, 122]}, {12, [23, 24]}, {13, [25, 26]}]
+             }
+    end
+  end
+
+  describe "traverse_while/2" do
+    test "skips branches" do
+      zipper = Zipper.new({1, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]})
+
+      add = 100
+
+      fun = fn sub ->
+        case Zipper.node(sub) do
+          {value, _children} when rem(value, 2) == 1 ->
+            {:cont, Zipper.update(sub, fn {value, children} -> {value + add, children} end)}
+
+          value when rem(value, 2) == 1 ->
+            {:cont, Zipper.update(sub, fn value -> value + add end)}
+
+          _else ->
+            {:skip, sub}
+        end
+      end
+
+      updated = Zipper.traverse_while(zipper, fun)
+
+      assert Zipper.node(updated) == {
+               101,
+               [{111, [121, 22]}, {12, [23, 24]}, {113, [125, 26]}]
+             }
+    end
+
+    test "halts traversing" do
+      zipper = Zipper.new({1, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]})
+
+      add = 100
+
+      fun = fn sub ->
+        case Zipper.node(sub) do
+          {value, _children} when rem(value, 2) == 1 ->
+            {:cont, Zipper.update(sub, fn {value, children} -> {value + add, children} end)}
+
+          value when rem(value, 2) == 1 ->
+            {:cont, Zipper.update(sub, fn value -> value + add end)}
+
+          _else ->
+            {:halt, sub}
+        end
+      end
+
+      updated = Zipper.traverse_while(zipper, fun)
+
+      assert Zipper.node(updated) == {101, [{111, [121, 22]}, {12, [23, 24]}, {13, [25, 26]}]}
+    end
+
+    test "traverses an ended zipper" do
+      zipper = Zipper.new({1, [2]})
+      zipper = %ZipperEx{zipper | path: :end}
+
+      zipper =
+        Zipper.traverse_while(zipper, fn z ->
+          case Zipper.node(z) do
+            {_value, _children} -> {:cont, z}
+            _value -> {:cont, Zipper.update(z, fn value -> value * 2 end)}
+          end
+        end)
+
+      assert Zipper.root(zipper) == {1, [4]}
+    end
+
+    test "traverses a subtree" do
+      zipper = Zipper.new({1, [{2, [3, 4]}, {5, [6]}]})
+
+      zipper =
+        zipper
+        |> Zipper.down()
+        |> Zipper.traverse_while(fn z ->
+          {:cont,
+           Zipper.update(z, fn
+             {value, children} -> {value * 2, children}
+             value -> value * 3
+           end)}
+        end)
+
+      assert Zipper.root(zipper) == {1, [{4, [9, 12]}, {5, [6]}]}
     end
   end
 
@@ -407,6 +548,66 @@ defmodule ZipperExTest do
                6,
                7
              ]
+    end
+
+    test "traverses a subtree" do
+      zipper = Zipper.new({42, [{10, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]}]})
+
+      add = 100
+
+      fun = fn sub, acc ->
+        case Zipper.node(sub) do
+          {value, _children} ->
+            {sub, [value + add | acc]}
+
+          value when is_integer(value) ->
+            {sub, [value | acc]}
+        end
+      end
+
+      {_zipper, acc} = zipper |> Zipper.down() |> Zipper.traverse([], fun)
+
+      assert acc == [26, 25, 113, 24, 23, 112, 22, 21, 111, 110]
+    end
+  end
+
+  describe "traverse_while/3" do
+    test "traverses a subtree" do
+      zipper = Zipper.new({42, [{10, [{11, [21, 22]}, {12, [23, 24]}, {13, [25, 26]}]}]})
+
+      add = 100
+
+      fun = fn sub, acc ->
+        case Zipper.node(sub) do
+          {value, _children} when rem(value, 2) == 0 ->
+            {:cont, sub, [value + add | acc]}
+
+          value when is_integer(value) ->
+            {:cont, sub, [value | acc]}
+
+          _else ->
+            {:skip, sub, acc}
+        end
+      end
+
+      {_zipper, acc} = zipper |> Zipper.down() |> Zipper.traverse_while([], fun)
+
+      assert acc == [24, 23, 112, 110]
+    end
+
+    test "traverses an ended zipper" do
+      zipper = Zipper.new({1, [2]})
+      zipper = %ZipperEx{zipper | path: :end}
+
+      {_zipper, acc} =
+        Zipper.traverse_while(zipper, [], fn z, acc ->
+          case Zipper.node(z) do
+            {value, _children} -> {:cont, z, [value * 2 | acc]}
+            value -> {:cont, z, [value * 3 | acc]}
+          end
+        end)
+
+      assert acc == [6, 2]
     end
   end
 
