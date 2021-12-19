@@ -2,14 +2,14 @@ defmodule ZipperEx.MixProject do
   use Mix.Project
 
   @version "0.2.0"
-  @source_url "https://github.com/hrzndhrn/cron"
+  @source_url "https://github.com/hrzndhrn/zipper_ex"
 
   def project do
     [
       app: :zipper_ex,
       version: @version,
       elixir: "~> 1.11",
-      source_ulr: @source_url,
+      source_url: @source_url,
       name: "ZipperEx",
       description: description(),
       start_permanent: Mix.env() == :prod,
