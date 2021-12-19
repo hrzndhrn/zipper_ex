@@ -12,7 +12,7 @@ defmodule ZipperExTest do
 
       assert ZipperEx.new(tree) == %ZipperEx{
                left: [],
-               location: tree,
+               loc: tree,
                module: nil,
                path: nil,
                right: []
@@ -24,7 +24,7 @@ defmodule ZipperExTest do
 
       assert Zipper.new(tree) == %ZipperEx{
                left: [],
-               location: tree,
+               loc: tree,
                module: Zipper,
                path: nil,
                right: []
@@ -69,11 +69,11 @@ defmodule ZipperExTest do
 
       assert ZipperEx.next(zipper) == %ZipperEx{
                left: [],
-               location: %Support.TreeNode{children: [], value: 2},
+               loc: %Support.TreeNode{children: [], value: 2},
                module: nil,
                path: %ZipperEx{
                  left: [],
-                 location: %Support.TreeNode{
+                 loc: %Support.TreeNode{
                    children: [%Support.TreeNode{children: [], value: 2}],
                    value: 1
                  },
@@ -91,11 +91,11 @@ defmodule ZipperExTest do
 
       assert Zipper.next(zipper) == %ZipperEx{
                left: [],
-               location: 2,
+               loc: 2,
                module: Support.Zipper,
                path: %ZipperEx{
                  left: [],
-                 location: {1, [2]},
+                 loc: {1, [2]},
                  module: Support.Zipper,
                  path: nil,
                  right: []
@@ -322,7 +322,7 @@ defmodule ZipperExTest do
 
       assert updated == %ZipperEx{
                left: [],
-               location: {101, [111, {112, [{121, [131]}, {222, [155]}]}]},
+               loc: {101, [111, {112, [{121, [131]}, {222, [155]}]}]},
                module: Support.Zipper,
                path: :end,
                right: []
@@ -330,7 +330,7 @@ defmodule ZipperExTest do
 
       assert Zipper.traverse(updated, fun) == %ZipperEx{
                left: [],
-               location: {201, [211, {212, [{221, [231]}, {322, [255]}]}]},
+               loc: {201, [211, {212, [{221, [231]}, {322, [255]}]}]},
                module: Support.Zipper,
                path: :end,
                right: []

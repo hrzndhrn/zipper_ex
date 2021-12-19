@@ -67,6 +67,12 @@ defmodule ZipperEx do
       #ZipperEx<{3, [4, 5]}>
       iex> Zipper.remove(zipper) |> Zipper.root()
       {1, [2, 6, {7, [0]}]}
+      iex> {_zipper, acc} = zipper |> ZipperEx.top() |> ZipperEx.traverse([], fn
+      ...>   %{loc: {_value, _children}} = zipper, acc -> {zipper, acc}
+      ...>   %{loc: value} = zipper, acc -> {zipper, [value | acc]}
+      ...> end)
+      iex> acc
+      [0, 6, 5, 4, 2]
 
   ### Using the `ZipperEx.Zipable` protocol
 
@@ -130,19 +136,28 @@ defmodule ZipperEx do
 
   @type tree :: term()
 
-  @opaque t(tree) :: %ZipperEx{
-            location: tree,
-            left: [tree],
-            path: t(tree) | nil | :end,
-            right: [tree]
-          }
+  @typedoc """
+  The `ZipperEx` type:
+  * `loc`: The current location of the zipper.
+  * `left`: The left side.
+  * `left`: The right side.
+  * `path`: The path to the top.
+  * `module`: The zipper module.
+  """
+  @type t(tree) :: %ZipperEx{
+          loc: tree,
+          left: [tree],
+          path: t(tree) | nil | :end,
+          right: [tree],
+          module: module() | nil
+        }
   @type t :: t(term())
 
-  @enforce_keys [:location]
+  @enforce_keys [:loc]
   defstruct left: [],
             path: nil,
             right: [],
-            location: nil,
+            loc: nil,
             module: nil
 
   @doc """
@@ -164,11 +179,11 @@ defmodule ZipperEx do
     quote do
       @behaviour ZipperEx
 
-      def new(tree), do: struct!(ZipperEx, location: tree, module: __MODULE__)
+      def new(tree), do: struct!(ZipperEx, loc: tree, module: __MODULE__)
 
-      def branch?(%ZipperEx{location: location}), do: branch?(location)
-      def children(%ZipperEx{location: location}), do: children(location)
-      def make_node(%ZipperEx{location: location}, children), do: make_node(location, children)
+      def branch?(%ZipperEx{loc: loc}), do: branch?(loc)
+      def children(%ZipperEx{loc: loc}), do: children(loc)
+      def make_node(%ZipperEx{loc: loc}, children), do: make_node(loc, children)
 
       defdelegate append_child(zipper, child), to: ZipperEx
       defdelegate down(zipper), to: ZipperEx
@@ -222,13 +237,13 @@ defmodule ZipperEx do
 
   def new(%ZipperEx{} = zipper), do: %ZipperEx{zipper | path: nil, left: [], right: []}
 
-  def new(tree), do: struct!(ZipperEx, location: tree)
+  def new(tree), do: struct!(ZipperEx, loc: tree)
 
   @doc """
   Returns `true` if the given `node` is a branch.
   """
   @spec branch?(ZipperEx.t()) :: boolean()
-  def branch?(%ZipperEx{location: location, module: nil}), do: Zipable.branch?(location)
+  def branch?(%ZipperEx{loc: loc, module: nil}), do: Zipable.branch?(loc)
 
   def branch?(%ZipperEx{} = zipper), do: Zipable.branch?(zipper)
 
@@ -236,7 +251,7 @@ defmodule ZipperEx do
   Returns the children of the given `node`.
   """
   @spec children(ZipperEx.t()) :: [tree()]
-  def children(%ZipperEx{location: location, module: nil}), do: Zipable.children(location)
+  def children(%ZipperEx{loc: loc, module: nil}), do: Zipable.children(loc)
 
   def children(%ZipperEx{} = zipper), do: Zipable.children(zipper)
 
@@ -244,8 +259,8 @@ defmodule ZipperEx do
   Creates a `node` from the given `node` and `children`.
   """
   @spec make_node(ZipperEx.t(), [tree()]) :: ZipperEx.t()
-  def make_node(%ZipperEx{location: location, module: nil}, children) do
-    Zipable.make_node(location, children)
+  def make_node(%ZipperEx{loc: loc, module: nil}, children) do
+    Zipable.make_node(loc, children)
   end
 
   def make_node(%ZipperEx{} = zipper, children) do
@@ -271,17 +286,17 @@ defmodule ZipperEx do
       #ZipperEx<#TreeNode<1, [#TreeNode<2, []>, #TreeNode<3, []>]>>
   """
   @spec append_child(ZipperEx.t(), tree()) :: ZipperEx.t()
-  def append_child(%ZipperEx{location: location, module: nil} = zipper, child) do
+  def append_child(%ZipperEx{loc: loc, module: nil} = zipper, child) do
     case branch?(zipper) do
       true -> do_append_child(zipper, child)
-      false -> %ZipperEx{zipper | location: Zipable.make_node(location, [child])}
+      false -> %ZipperEx{zipper | loc: Zipable.make_node(loc, [child])}
     end
   end
 
   def append_child(%ZipperEx{} = zipper, child) do
     case branch?(zipper) do
       true -> do_append_child(zipper, child)
-      false -> %ZipperEx{zipper | location: Zipable.make_node(zipper, [child])}
+      false -> %ZipperEx{zipper | loc: Zipable.make_node(zipper, [child])}
     end
   end
 
@@ -308,8 +323,8 @@ defmodule ZipperEx do
   def down(%ZipperEx{} = zipper) do
     case branch?(zipper) do
       true ->
-        [location | right] = children(zipper)
-        %ZipperEx{location: location, path: zipper, right: right, module: zipper.module}
+        [loc | right] = children(zipper)
+        %ZipperEx{loc: loc, path: zipper, right: right, module: zipper.module}
 
       false ->
         nil
@@ -366,17 +381,17 @@ defmodule ZipperEx do
       #ZipperEx<#TreeNode<1, [#TreeNode<2, []>, #TreeNode<3, []>]>>
   """
   @spec insert_child(ZipperEx.t(), tree()) :: ZipperEx.t()
-  def insert_child(%ZipperEx{location: location, module: nil} = zipper, child) do
+  def insert_child(%ZipperEx{loc: loc, module: nil} = zipper, child) do
     case branch?(zipper) do
       true -> do_insert_child(zipper, child)
-      false -> %ZipperEx{zipper | location: Zipable.make_node(location, [child])}
+      false -> %ZipperEx{zipper | loc: Zipable.make_node(loc, [child])}
     end
   end
 
   def insert_child(%ZipperEx{} = zipper, child) do
     case branch?(zipper) do
       true -> do_insert_child(zipper, child)
-      false -> %ZipperEx{zipper | location: Zipable.make_node(zipper, [child])}
+      false -> %ZipperEx{zipper | loc: Zipable.make_node(zipper, [child])}
     end
   end
 
@@ -456,8 +471,8 @@ defmodule ZipperEx do
   @spec left(ZipperEx.t()) :: ZipperEx.t() | nil
   def left(%ZipperEx{left: []}), do: nil
 
-  def left(%ZipperEx{left: [next | left], location: location, right: right} = zipper) do
-    %ZipperEx{zipper | location: next, left: left, right: [location | right]}
+  def left(%ZipperEx{left: [next | left], loc: loc, right: right} = zipper) do
+    %ZipperEx{zipper | loc: next, left: left, right: [loc | right]}
   end
 
   @doc """
@@ -480,10 +495,10 @@ defmodule ZipperEx do
   @spec leftmost(ZipperEx.t()) :: ZipperEx.t()
   def leftmost(%ZipperEx{left: []} = zipper), do: zipper
 
-  def leftmost(%ZipperEx{location: location, right: right, left: left} = zipper) do
+  def leftmost(%ZipperEx{loc: loc, right: right, left: left} = zipper) do
     {left, [leftmost]} = Enum.split(left, -1)
-    right = Enum.reverse(left) ++ [location] ++ right
-    %ZipperEx{zipper | location: leftmost, left: [], right: right}
+    right = Enum.reverse(left) ++ [loc] ++ right
+    %ZipperEx{zipper | loc: leftmost, left: [], right: right}
   end
 
   @doc """
@@ -568,7 +583,7 @@ defmodule ZipperEx do
       {1, [{2, [3, 4]}, 5]}
   """
   @spec node(ZipperEx.t()) :: tree()
-  def node(%ZipperEx{location: location}), do: location
+  def node(%ZipperEx{loc: loc}), do: loc
 
   @doc """
   Returns the previours zipper for the given `zipper`.
@@ -631,11 +646,11 @@ defmodule ZipperEx do
   end
 
   def remove(%ZipperEx{left: [], path: path, right: right}) do
-    %ZipperEx{path | location: make_node(path, right)}
+    %ZipperEx{path | loc: make_node(path, right)}
   end
 
   def remove(%ZipperEx{left: [next | left]} = zipper) do
-    prev(%ZipperEx{zipper | left: left, location: next}, :down)
+    prev(%ZipperEx{zipper | left: left, loc: next}, :down)
   end
 
   @doc """
@@ -650,7 +665,7 @@ defmodule ZipperEx do
   """
   @spec replace(ZipperEx.t(), tree()) :: ZipperEx.t()
   def replace(%ZipperEx{} = zipper, node) do
-    %ZipperEx{zipper | location: node}
+    %ZipperEx{zipper | loc: node}
   end
 
   @doc """
@@ -678,7 +693,7 @@ defmodule ZipperEx do
   def right(%ZipperEx{right: []}), do: nil
 
   def right(%ZipperEx{right: [next | right]} = zipper) do
-    %ZipperEx{zipper | location: next, right: right, left: [zipper.location | zipper.left]}
+    %ZipperEx{zipper | loc: next, right: right, left: [zipper.loc | zipper.left]}
   end
 
   @doc """
@@ -701,10 +716,10 @@ defmodule ZipperEx do
   @spec rightmost(ZipperEx.t()) :: ZipperEx.t()
   def rightmost(%ZipperEx{right: []} = zipper), do: zipper
 
-  def rightmost(%ZipperEx{location: location, right: right, left: left} = zipper) do
+  def rightmost(%ZipperEx{loc: loc, right: right, left: left} = zipper) do
     {right, [rightmost]} = Enum.split(right, -1)
-    left = Enum.reverse(right) ++ [location] ++ left
-    %ZipperEx{zipper | location: rightmost, right: [], left: left}
+    left = Enum.reverse(right) ++ [loc] ++ left
+    %ZipperEx{zipper | loc: rightmost, right: [], left: left}
   end
 
   @doc """
@@ -1002,9 +1017,9 @@ defmodule ZipperEx do
   @spec up(ZipperEx.t()) :: ZipperEx.t() | nil
   def up(%ZipperEx{path: path}) when path in [nil, :end], do: nil
 
-  def up(%ZipperEx{left: left, location: location, path: path, right: right}) do
-    children = Enum.reverse(left) ++ [location] ++ right
-    %ZipperEx{path | location: make_node(path, children)}
+  def up(%ZipperEx{left: left, loc: loc, path: path, right: right}) do
+    children = Enum.reverse(left) ++ [loc] ++ right
+    %ZipperEx{path | loc: make_node(path, children)}
   end
 
   @doc """
@@ -1021,27 +1036,27 @@ defmodule ZipperEx do
       #TreeNode<1, [#TreeNode<99, []>, #TreeNode<3, []>]>
   """
   @spec update(ZipperEx.t(), (tree() -> tree())) :: ZipperEx.t()
-  def update(%ZipperEx{location: location} = zipper, fun) when is_function(fun, 1) do
-    %ZipperEx{zipper | location: fun.(location)}
+  def update(%ZipperEx{loc: loc} = zipper, fun) when is_function(fun, 1) do
+    %ZipperEx{zipper | loc: fun.(loc)}
   end
 
   defimpl Zipable do
-    def branch?(%ZipperEx{module: module, location: location}) when not is_nil(module) do
-      module.branch?(location)
+    def branch?(%ZipperEx{module: module, loc: loc}) when not is_nil(module) do
+      module.branch?(loc)
     end
 
-    def children(%ZipperEx{module: module, location: location}) when not is_nil(module) do
-      module.children(location)
+    def children(%ZipperEx{module: module, loc: loc}) when not is_nil(module) do
+      module.children(loc)
     end
 
-    def make_node(%ZipperEx{module: module, location: location}, children)
+    def make_node(%ZipperEx{module: module, loc: loc}, children)
         when not is_nil(module) do
-      module.make_node(location, children)
+      module.make_node(loc, children)
     end
   end
 
   defimpl Inspect do
-    def inspect(zipper, _opts), do: "#ZipperEx<#{inspect(zipper.location)}>"
+    def inspect(zipper, _opts), do: "#ZipperEx<#{inspect(zipper.loc)}>"
   end
 
   defimpl Enumerable do
