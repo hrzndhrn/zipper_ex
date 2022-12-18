@@ -1,6 +1,6 @@
 # ZipperEx
 [![Hex.pm: version](https://img.shields.io/hexpm/v/zipper_ex.svg?style=flat-square)](https://hex.pm/packages/zipper_ex)
-[![GitHub: CI status](https://img.shields.io/github/workflow/status/hrzndhrn/zipper_ex/CI?style=flat-square)](https://github.com/hrzndhrn/zipper_ex/actions)
+[![GitHub: CI status](https://img.shields.io/github/actions/workflow/status/hrzndhrn/zipper_ex/ci.yml?branch=main&style=flat-square)](https://github.com/hrzndhrn/zipper_ex/actions)
 [![Coveralls: coverage](https://img.shields.io/coveralls/github/hrzndhrn/zipper_ex?style=flat-square)](https://coveralls.io/github/hrzndhrn/zipper_ex)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://github.com/hrzndhrn/zipper_ex/blob/main/LICENSE.md)
 
